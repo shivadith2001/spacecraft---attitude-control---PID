@@ -1,0 +1,7 @@
+Edge cases covered by automated tests:
+1) PID compute rejects zero/negative dt.
+2) Spacecraft dynamics reject zero/negative dt.
+3) Simulation rejects zero/negative dt.
+4) Simulation rejects zero/negative duration.
+5) Simulation telemetry length matches expected steps (duration/dt + 1).
+6) Simulation handles large target angles without NaN/inf outputs.
