@@ -12,7 +12,7 @@ typedef struct {
     float ki;
     float integral;
     float integral_limit;
-    float torque_limit_nm;
+    float duty_limit;
 } rw_pi_controller_t;
 
 void RW_Controller_Reset(rw_pi_controller_t *controller);

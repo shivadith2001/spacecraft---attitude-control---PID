@@ -10,6 +10,13 @@ void Nucleo_Clock_Init(void);
 void Nucleo_GPIO_Init(void);
 void Nucleo_I2C1_Init(void);
 void Nucleo_PWM_Init(void);
+void Nucleo_Encoder_Init(void);
+
+void SystemClock_Config(void);
+void MX_GPIO_Init(void);
+void MX_I2C1_Init(void);
+void MX_TIM2_Init(void);
+void MX_TIM3_Init(void);
 
 #ifdef __cplusplus
 }

@@ -34,5 +34,19 @@ This repo also includes a C starter implementation suitable for integrating a si
 
 The implementation mirrors the block diagram flow (sensors → attitude determination → control laws → actuators → dynamics with disturbance torques) through `ADCS_RunCycle`, which wires together `ADCS_ReadSensors`, `ADCS_AttitudeDetermine`, `ADCS_ControlLaw`, `ADCS_ActuatorApply`, and optional `ADCS_DynamicsUpdate`. Reaction wheel torque requests are mapped to wheel speed setpoints at 1 Hz and regulated by a 1 kHz PI controller per the thesis brief. Replace the TODO stubs with your Nucleo board support package (HAL) and device drivers, then tune gains/inertia for your hardware.
 
+### NUCLEO-F446RE wiring plan (default)
+- **BMX160 IMU on I2C1**: PB8 (SCL), PB9 (SDA), 3.3V, GND, optional INT on PC4 (EXTI).
+- **Reaction wheel driver (PWM + GPIO)**: PA6 (TIM3_CH1 PWM ~20 kHz), PB0 (DIR), PB1 (EN), optional FAULT on PC13.
+- **Quadrature encoder**: PA0 (TIM2_CH1 A), PA1 (TIM2_CH2 B), optional index Z on PA2 (EXTI).
+
+### CubeMX configuration checklist (NUCLEO-F446RE)
+- SYSCLK ≈ 84 MHz (HSE or HSI).
+- FreeRTOS (CMSIS-V2) enabled.
+- I2C1 at 400 kHz on PB8/PB9.
+- TIM3 PWM on CH1 (PA6), PWM frequency ≈ 20 kHz.
+- TIM2 encoder interface mode on PA0/PA1 (32-bit counter).
+- GPIO outputs: PB0/PB1; GPIO input: PC13 (optional).
+- NVIC priorities for TIM2/TIM3 below `configMAX_SYSCALL_INTERRUPT_PRIORITY`.
+
 ## Nucleo reaction wheel repo snapshot
 If you want a separate repo layout dedicated to STM32 Nucleo reaction wheel control, a full copy of the embedded sources lives under `nucleo_adcs/`. You can initialize it as its own Git repository and integrate directly into your FreeRTOS project.

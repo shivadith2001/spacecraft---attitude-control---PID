@@ -35,6 +35,6 @@ float RW_Controller_Update(
         -controller->integral_limit,
         controller->integral_limit);
 
-    float torque_cmd = (controller->kp * error) + (controller->ki * controller->integral);
-    return RW_Controller_Clamp(torque_cmd, -controller->torque_limit_nm, controller->torque_limit_nm);
+    float duty_cmd = (controller->kp * error) + (controller->ki * controller->integral);
+    return RW_Controller_Clamp(duty_cmd, -controller->duty_limit, controller->duty_limit);
 }

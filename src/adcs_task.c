@@ -1,4 +1,5 @@
 #include "adcs.h"
+#include "bmx160.h"
 #include "rw_interface.h"
 
 #include "FreeRTOS.h"
@@ -18,12 +19,7 @@ static const adcs_config_t g_adcs_config = {
 };
 
 static bool BMX160_ReadGyroRadS(float *gyro_rad_s) {
-    /* TODO: Replace with BMX160 driver call using STM32 Nucleo I2C/SPI HAL. */
-    if (gyro_rad_s == NULL) {
-        return false;
-    }
-    *gyro_rad_s = 0.0f;
-    return true;
+    return BMX160_ReadGyroZRadS(gyro_rad_s);
 }
 
 static bool AdjacentControl_ReadAbsoluteAngle(float *angle_rad) {
@@ -49,6 +45,7 @@ void ADCS_Task(void *argument) {
     g_pid.integral_limit = 0.5f;
 
     g_adcs_state.target_angle_rad = 0.0f;
+    (void)BMX160_Init();
 
     TickType_t last_wake_time = xTaskGetTickCount();
 
