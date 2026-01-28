@@ -24,15 +24,22 @@ Tune the controller gains or simulation parameters in `src/aocs_demo.py` to expl
 ## Embedded ADCS starter (STM32 Nucleo + BMX160)
 This repo also includes a C starter implementation suitable for integrating a single-axis ADCS loop into a FreeRTOS task list on STM32 Nucleo boards. The files are:
 - `src/adcs.h` / `src/adcs.c`: PID + attitude state update core.
-- `src/adcs_task.c`: 1 Hz FreeRTOS task that reads BMX160 gyro data, blends adjacent actuator torque, and publishes a reaction wheel torque request.
+- `src/adcs_task.c`: 100 Hz FreeRTOS task that reads BMX160 gyro data, blends adjacent actuator torque, and publishes a reaction wheel torque request.
+- `src/bmx160.h` / `src/bmx160.c`: BMX160 I2C driver for gyro Z-axis reads.
 - `src/rw_command_map.h` / `src/rw_command_map.c`: Torque-to-speed setpoint mapping with quantization and saturation (1 Hz).
 - `src/rw_controller.h` / `src/rw_controller.c`: Inner-loop PI speed controller for the reaction wheel (1 kHz).
 - `src/rw_interface.h` / `src/rw_interface.c`: FreeRTOS-safe torque command handoff between tasks.
 - `src/rw_task.c`: 1 kHz reaction wheel task that converts torque requests into speed setpoints and driver commands.
 - `src/nucleo_board.h` / `src/nucleo_board.c`: Nucleo board init stubs (clock/GPIO/I2C/PWM).
+- `src/rtos_tasks.h` / `src/rtos_tasks.c`: FreeRTOS task creation helpers for ADCS/RW.
 - `src/main.c`: Minimal STM32 Nucleo entry point showing task creation.
 
 The implementation mirrors the block diagram flow (sensors → attitude determination → control laws → actuators → dynamics with disturbance torques) through `ADCS_RunCycle`, which wires together `ADCS_ReadSensors`, `ADCS_AttitudeDetermine`, `ADCS_ControlLaw`, `ADCS_ActuatorApply`, and optional `ADCS_DynamicsUpdate`. Reaction wheel torque requests are mapped to wheel speed setpoints at 1 Hz and regulated by a 1 kHz PI controller per the thesis brief. Replace the TODO stubs with your Nucleo board support package (HAL) and device drivers, then tune gains/inertia for your hardware.
+
+### Paper-aligned control updates
+- **Detumble → pointing modes**: start in detumble using a magnetorquer rate damper until |ω| falls below the configured threshold, then switch to reaction-wheel pointing.
+- **Outer P+PI control law**: attitude PI with rate feedback (Kd * ω) and anti-windup handling when torque saturates.
+- **Torque low-pass**: first-order discrete filter to model actuator torque bandwidth (τw).
 
 ### NUCLEO-F446RE wiring plan (default)
 - **BMX160 IMU on I2C1**: PB8 (SCL), PB9 (SDA), 3.3V, GND, optional INT on PC4 (EXTI).

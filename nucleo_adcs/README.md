@@ -4,14 +4,20 @@ This folder is a standalone snapshot of the embedded ADCS + reaction wheel contr
 
 ## Contents
 - `src/adcs.h` / `src/adcs.c`: PID + attitude state update core with block-diagram stages.
-- `src/adcs_task.c`: 1 Hz FreeRTOS task that reads BMX160 gyro data, fuses an adjacent attitude source, and publishes reaction wheel torque requests.
+- `src/adcs_task.c`: 100 Hz FreeRTOS task that reads BMX160 gyro data, fuses an adjacent attitude source, and publishes reaction wheel torque requests.
 - `src/bmx160.h` / `src/bmx160.c`: BMX160 I2C driver for gyro Z-axis reads.
 - `src/rw_command_map.h` / `src/rw_command_map.c`: Torque-to-speed mapping with quantization and saturation (1 Hz).
 - `src/rw_controller.h` / `src/rw_controller.c`: 1 kHz PI speed controller for the reaction wheel.
 - `src/rw_interface.h` / `src/rw_interface.c`: FreeRTOS-safe torque command handoff.
 - `src/rw_task.c`: 1 kHz reaction wheel control task (encoder read + torque driver).
 - `src/nucleo_board.h` / `src/nucleo_board.c`: Nucleo board initialization stubs (clock/GPIO/I2C/PWM).
+- `src/rtos_tasks.h` / `src/rtos_tasks.c`: FreeRTOS task creation helpers for ADCS/RW.
 - `src/main.c`: Minimal Nucleo entry point showing task creation.
+
+## Paper-aligned control updates
+- **Detumble → pointing modes**: start in detumble using a magnetorquer rate damper until |ω| falls below the configured threshold, then switch to reaction-wheel pointing.
+- **Outer P+PI control law**: attitude PI with rate feedback (Kd * ω) and anti-windup handling when torque saturates.
+- **Torque low-pass**: first-order discrete filter to model actuator torque bandwidth (τw).
 
 ## NUCLEO-F446RE wiring plan (default)
 - **BMX160 IMU on I2C1**: PB8 (SCL), PB9 (SDA), 3.3V, GND, optional INT on PC4 (EXTI).

@@ -12,7 +12,7 @@
 
 #define RW_CTRL_RATE_HZ 1000U
 #define RW_CTRL_PERIOD_MS (1000U / RW_CTRL_RATE_HZ)
-#define RW_CMD_RATE_HZ 1U
+#define RW_CMD_RATE_HZ 100U
 
 static rw_command_map_t g_rw_cmd_map = {
     .wheel_inertia_kg_m2 = 9.35e-7f,
@@ -106,6 +106,7 @@ void RW_Task(void *argument) {
 
         float omega_meas = 0.0f;
         if (RW_Encoder_ReadRadS(&omega_meas)) {
+            RW_Command_SetWheelSpeedRadS(omega_meas);
             float duty_out = RW_Controller_Update(
                 &g_rw_controller,
                 omega_set,
@@ -114,6 +115,7 @@ void RW_Task(void *argument) {
             RW_Driver_SetDuty(duty_out);
         } else {
             RW_Driver_Enable(false);
+            RW_Command_SetWheelSpeedRadS(0.0f);
             RW_Driver_SetDuty(0.0f);
         }
 

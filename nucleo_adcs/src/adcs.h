@@ -47,10 +47,18 @@ typedef struct {
     float rate_rad_s;
 } adcs_dynamics_state_t;
 
+typedef enum {
+    ADCS_MODE_DETUMBLE = 0,
+    ADCS_MODE_POINTING = 1
+} adcs_mode_t;
+
 typedef struct {
     float target_angle_rad;
     adcs_attitude_estimate_t estimate;
     adcs_dynamics_state_t dynamics;
+    float torque_filter_state_nm;
+    float wheel_speed_rad_s;
+    adcs_mode_t mode;
 } adcs_state_t;
 
 typedef struct {
@@ -58,8 +66,21 @@ typedef struct {
     float max_reaction_wheel_torque_nm;
     float max_magnetorquer_dipole_am2;
     float complementary_filter_alpha;
+    float torque_filter_tw_s;
+    float detumble_rate_threshold_rad_s;
+    float detumble_gain_am2_per_rad_s;
     bool use_simulated_dynamics;
 } adcs_config_t;
+
+typedef struct {
+    float attitude_error_rad;
+    float rate_rad_s;
+    float torque_cmd_nm;
+    float torque_applied_nm;
+    float wheel_speed_rad_s;
+    float integral_state;
+    adcs_mode_t mode;
+} adcs_telemetry_t;
 
 typedef bool (*adcs_read_gyro_fn)(float *gyro_rad_s);
 typedef bool (*adcs_read_absolute_angle_fn)(float *angle_rad);
@@ -83,7 +104,8 @@ float ADCS_ControlLaw(
     adcs_state_t *state,
     pid_controller_t *pid,
     const adcs_disturbance_t *disturbance,
-    adcs_actuator_cmd_t *actuator_cmd);
+    adcs_actuator_cmd_t *actuator_cmd,
+    adcs_telemetry_t *telemetry);
 void ADCS_ActuatorApply(
     const adcs_config_t *config,
     const adcs_actuator_cmd_t *actuator_cmd,
@@ -103,7 +125,8 @@ bool ADCS_RunCycle(
     adcs_read_absolute_angle_fn read_absolute_angle,
     adcs_write_reaction_wheel_fn write_rw,
     adcs_write_magnetorquer_fn write_mtq,
-    adcs_actuator_cmd_t *actuator_cmd);
+    adcs_actuator_cmd_t *actuator_cmd,
+    adcs_telemetry_t *telemetry);
 
 float ADCS_Clamp(float value, float min_value, float max_value);
 

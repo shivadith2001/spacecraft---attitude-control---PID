@@ -5,7 +5,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-#define ADCS_TASK_RATE_HZ 1U
+#define ADCS_TASK_RATE_HZ 100U
 #define ADCS_TASK_PERIOD_MS (1000U / ADCS_TASK_RATE_HZ)
 
 static adcs_state_t g_adcs_state;
@@ -15,6 +15,9 @@ static const adcs_config_t g_adcs_config = {
     .max_reaction_wheel_torque_nm = 0.001f,
     .max_magnetorquer_dipole_am2 = 0.15f,
     .complementary_filter_alpha = 0.98f,
+    .torque_filter_tw_s = 0.1f,
+    .detumble_rate_threshold_rad_s = 0.05f,
+    .detumble_gain_am2_per_rad_s = 0.02f,
     .use_simulated_dynamics = false,
 };
 
@@ -55,6 +58,8 @@ void ADCS_Task(void *argument) {
             .external_torque_nm = 0.0f,
         };
         adcs_actuator_cmd_t actuator_cmd = {0};
+        adcs_telemetry_t telemetry = {0};
+        g_adcs_state.wheel_speed_rad_s = RW_Command_GetWheelSpeedRadS();
         (void)ADCS_RunCycle(
             &g_adcs_config,
             &g_adcs_state,
@@ -64,9 +69,11 @@ void ADCS_Task(void *argument) {
             AdjacentControl_ReadAbsoluteAngle,
             NULL,
             Magnetorquer_SetDipole,
-            &actuator_cmd);
+            &actuator_cmd,
+            &telemetry);
 
         RW_Command_SetTorqueNm(actuator_cmd.reaction_wheel_torque_nm);
+        /* TODO: stream telemetry.attitude_error_rad, telemetry.rate_rad_s, telemetry.torque_cmd_nm. */
 
         vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(ADCS_TASK_PERIOD_MS));
     }

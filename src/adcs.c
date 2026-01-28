@@ -42,6 +42,9 @@ void ADCS_Init(adcs_state_t *state, pid_controller_t *pid, float inertia_kg_m2) 
     state->dynamics.inertia_kg_m2 = inertia_kg_m2;
     state->dynamics.angle_rad = 0.0f;
     state->dynamics.rate_rad_s = 0.0f;
+    state->torque_filter_state_nm = 0.0f;
+    state->wheel_speed_rad_s = 0.0f;
+    state->mode = ADCS_MODE_DETUMBLE;
 
     PID_Reset(pid);
 }
@@ -97,31 +100,83 @@ float ADCS_ControlLaw(
     adcs_state_t *state,
     pid_controller_t *pid,
     const adcs_disturbance_t *disturbance,
-    adcs_actuator_cmd_t *actuator_cmd) {
+    adcs_actuator_cmd_t *actuator_cmd,
+    adcs_telemetry_t *telemetry) {
     if (config == NULL || state == NULL || pid == NULL || actuator_cmd == NULL || config->dt_s <= 0.0f) {
         return 0.0f;
     }
 
     float error = state->target_angle_rad - state->estimate.angle_rad;
-    float reaction_wheel_torque = PID_Compute(pid, error, config->dt_s);
+    float rate = state->estimate.rate_rad_s;
+    float reaction_wheel_torque_cmd = 0.0f;
+    float reaction_wheel_torque_applied = 0.0f;
+    float magnetorquer_dipole = 0.0f;
+
+    if (state->mode == ADCS_MODE_DETUMBLE) {
+        magnetorquer_dipole = -config->detumble_gain_am2_per_rad_s * rate;
+        magnetorquer_dipole = ADCS_Clamp(
+            magnetorquer_dipole,
+            -config->max_magnetorquer_dipole_am2,
+            config->max_magnetorquer_dipole_am2);
+        reaction_wheel_torque_cmd = 0.0f;
+        state->torque_filter_state_nm = 0.0f;
+
+        if (fabsf(rate) <= config->detumble_rate_threshold_rad_s) {
+            state->mode = ADCS_MODE_POINTING;
+            PID_Reset(pid);
+        }
+    }
+
+    if (state->mode == ADCS_MODE_POINTING) {
+        float integral_candidate = pid->integral_error + (error * config->dt_s);
+        integral_candidate = ADCS_Clamp(integral_candidate, -pid->integral_limit, pid->integral_limit);
+
+        float torque_candidate = (pid->kp * error) + (pid->ki * integral_candidate) - (pid->kd * rate);
+        float max_torque = config->max_reaction_wheel_torque_nm;
+        bool saturating = fabsf(torque_candidate) > max_torque;
+        if (!saturating || (torque_candidate * error) < 0.0f) {
+            pid->integral_error = integral_candidate;
+        }
+
+        reaction_wheel_torque_cmd = (pid->kp * error) + (pid->ki * pid->integral_error) - (pid->kd * rate);
+        reaction_wheel_torque_cmd = ADCS_Clamp(
+            reaction_wheel_torque_cmd,
+            -config->max_reaction_wheel_torque_nm,
+            config->max_reaction_wheel_torque_nm);
+
+        float filter_alpha = 1.0f;
+        if (config->torque_filter_tw_s > 0.0f) {
+            filter_alpha = config->dt_s / (config->torque_filter_tw_s + config->dt_s);
+        }
+        state->torque_filter_state_nm += filter_alpha * (reaction_wheel_torque_cmd - state->torque_filter_state_nm);
+        reaction_wheel_torque_applied = ADCS_Clamp(
+            state->torque_filter_state_nm,
+            -config->max_reaction_wheel_torque_nm,
+            config->max_reaction_wheel_torque_nm);
+    }
 
     float total_disturbance = 0.0f;
     if (disturbance != NULL) {
         total_disturbance = disturbance->internal_torque_nm + disturbance->external_torque_nm;
     }
 
-    reaction_wheel_torque = ADCS_Clamp(
-        reaction_wheel_torque,
-        -config->max_reaction_wheel_torque_nm,
-        config->max_reaction_wheel_torque_nm);
-
-    actuator_cmd->reaction_wheel_torque_nm = reaction_wheel_torque;
+    actuator_cmd->reaction_wheel_torque_nm = reaction_wheel_torque_applied;
     actuator_cmd->magnetorquer_dipole_am2 = ADCS_Clamp(
-        -total_disturbance,
+        magnetorquer_dipole - total_disturbance,
         -config->max_magnetorquer_dipole_am2,
         config->max_magnetorquer_dipole_am2);
 
-    return reaction_wheel_torque;
+    if (telemetry != NULL) {
+        telemetry->attitude_error_rad = error;
+        telemetry->rate_rad_s = rate;
+        telemetry->torque_cmd_nm = reaction_wheel_torque_cmd;
+        telemetry->torque_applied_nm = reaction_wheel_torque_applied;
+        telemetry->wheel_speed_rad_s = state->wheel_speed_rad_s;
+        telemetry->integral_state = pid->integral_error;
+        telemetry->mode = state->mode;
+    }
+
+    return reaction_wheel_torque_applied;
 }
 
 void ADCS_ActuatorApply(
@@ -181,7 +236,8 @@ bool ADCS_RunCycle(
     adcs_read_absolute_angle_fn read_absolute_angle,
     adcs_write_reaction_wheel_fn write_rw,
     adcs_write_magnetorquer_fn write_mtq,
-    adcs_actuator_cmd_t *actuator_cmd) {
+    adcs_actuator_cmd_t *actuator_cmd,
+    adcs_telemetry_t *telemetry) {
     if (config == NULL || state == NULL || pid == NULL || actuator_cmd == NULL) {
         return false;
     }
@@ -192,7 +248,7 @@ bool ADCS_RunCycle(
     }
 
     ADCS_AttitudeDetermine(config, &sensors, &state->estimate);
-    float applied_torque = ADCS_ControlLaw(config, state, pid, disturbance, actuator_cmd);
+    float applied_torque = ADCS_ControlLaw(config, state, pid, disturbance, actuator_cmd, telemetry);
     ADCS_ActuatorApply(config, actuator_cmd, write_rw, write_mtq);
 
     if (config->use_simulated_dynamics) {
